@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Environments
+.venv/
+venv/
+.env
+
+# Jupyter
+.ipynb_checkpoints
+
+# Streamlit
+.streamlit/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Test results
+.pytest_cache/
+
+# Model artifacts
+models/*.joblib
+
+# Data output
+model_results/
+
+# Claude
+.claude/
+
+# Legacy
+archive_unused/
+
+# Large Files
+litho_data/
