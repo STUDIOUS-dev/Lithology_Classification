@@ -648,15 +648,6 @@ def main():
     st.markdown(f'{icon("rock")} <span style="font-size:2rem; font-weight:700;">Lithology Classification System</span>',
                 unsafe_allow_html=True)
 
-    # Sidebar debug toggle (hidden by default)
-    show_debug = st.sidebar.checkbox("Show debug info", value=False,
-                                     help="Toggle path/debug details")
-    if show_debug:
-        with st.sidebar.expander("Debug Info", expanded=False):
-            st.write(f"Current directory: {os.getcwd()}")
-            st.write(f"Model results path: {app.MODEL_DIR}")
-            st.write(f"Model results exists: {app.MODEL_DIR.exists()}")
-
     st.markdown("""
     <div style="text-align: center; margin-bottom: 2rem;">
         <p style="font-size: 1.2rem; color: #666;">
@@ -666,8 +657,17 @@ def main():
     </div>
     """, unsafe_allow_html=True)
 
-    # Initialize app
+    # Initialize app early
     app = LithologyApp()
+
+    # Sidebar debug toggle (now that app is initialized)
+    show_debug = st.sidebar.checkbox("Show debug info", value=False,
+                                     help="Toggle path/debug details")
+    if show_debug:
+        with st.sidebar.expander("Debug Info", expanded=False):
+            st.write(f"Current directory: {os.getcwd()}")
+            st.write(f"Model results path: {app.MODEL_DIR}")
+            st.write(f"Model results exists: {app.MODEL_DIR.exists()}")
 
     # Check for and download models if needed
     models_available = download_models_if_needed()
