@@ -19,8 +19,9 @@ I built this with a focus on **transparency** and **usability**. It's not just a
 
 ## <img src="https://raw.githubusercontent.com/lucide-icons/lucide/main/icons/wrench.svg" width="24" height="24" style="vertical-align: middle;"> Setup and Installation
 
-Getting started is straightforward. I recommend using a virtual environment:
+Getting started is straightforward. This project uses pip-tools for reproducible dependency management.
 
+### For Development/Local Use:
 ```bash
 # Clone the repository
 git clone https://github.com/yourusername/04_Lithology_Classification_ML.git
@@ -31,9 +32,21 @@ python -m venv .venv
 .venv\Scripts\activate  # On Windows
 source .venv/bin/activate  # On macOS/Linux
 
-# Install dependencies
+# Install pip-tools and compile dependencies
+pip install pip-tools
+pip-compile requirements.in
+
+# Install the compiled requirements
 pip install -r requirements.txt
 ```
+
+### For Streamlit Community Cloud Deployment:
+The project is configured for seamless deployment to Streamlit Community Cloud:
+- `runtime.txt`: Pins Python version to 3.10 for ML compatibility
+- `requirements.in`: Defines flexible version ranges for maintainability
+- `requirements.txt`: Auto-generated exact pins for reproducible builds
+
+Simply push to GitHub and deploy - no manual dependency management needed!
 
 ## <img src="https://raw.githubusercontent.com/lucide-icons/lucide/main/icons/line-chart.svg" width="24" height="24" style="vertical-align: middle;"> How to Use
 
@@ -61,7 +74,9 @@ Choose your model (Random Forest is usually a safe bet for reliability) and watc
 - `litho_data/`: Place your training/testing CSVs here.
 - `models/`: Where the trained `.joblib` artifacts are stored.
 - `model_results/`: Logs, evaluation reports, and performance metrics.
-- `requirements.txt`: Everything you need to get the environment running.
+- `requirements.in`: Flexible dependency ranges for maintainability.
+- `requirements.txt`: Auto-generated exact pins for reproducible builds.
+- `runtime.txt`: Python version pinning for Streamlit Cloud deployment.
 
 ## <img src="https://raw.githubusercontent.com/lucide-icons/lucide/main/icons/binary.svg" width="24" height="24" style="vertical-align: middle;"> Technical Note: Using the Models in Python
 

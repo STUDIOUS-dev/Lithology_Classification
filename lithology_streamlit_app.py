@@ -464,7 +464,11 @@ class LithologyApp:
                     model_name = filename.split('_model_')[0]
 
                     st.info(f"Loading {model_name} model from {model_file}")
-                    self.models[model_name] = joblib.load(model_file)
+                    try:
+                        self.models[model_name] = joblib.load(model_file)
+                    except Exception as e:
+                        st.error(f"Model loading failed for {model_name}: {e}. The model may need to be retrained on the current sklearn version.")
+                        st.stop()
                     models_loaded += 1
 
             st.success(f"Loaded {models_loaded} models: {list(self.models.keys())}")
@@ -472,7 +476,11 @@ class LithologyApp:
             # Load preprocessing objects
             latest_preprocessing = max(preprocessing_files, key=os.path.getctime)
             st.info(f"Loading preprocessing objects from {latest_preprocessing}")
-            self.preprocessing_objects = joblib.load(latest_preprocessing)
+            try:
+                self.preprocessing_objects = joblib.load(latest_preprocessing)
+            except Exception as e:
+                st.error(f"Preprocessing objects loading failed: {e}. The preprocessing objects may need to be regenerated on the current sklearn version.")
+                st.stop()
 
             # Load evaluation results if available
             eval_files = glob.glob("model_results/evaluation_results_*.json")
