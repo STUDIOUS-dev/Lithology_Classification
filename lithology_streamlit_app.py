@@ -322,11 +322,12 @@ st.markdown("""
 
 class LithologyApp:
     def __init__(self):
+        self.base_dir = Path(__file__).resolve().parent
         self.models = {}
         self.preprocessing_objects = None
         self.evaluation_results = {}
         self.feature_columns = ['GR', 'RHOB', 'NPHI', 'RDEP', 'DTC', 'PEF']
-        self.MODEL_DIR = Path(__file__).resolve().parent / "model_results"
+        self.MODEL_DIR = self.base_dir / "model_results"
 
     def _ensure_imputer_compatibility(self, imputer):
         """Ensure SimpleImputer has _fill_dtype for compatibility across sklearn versions."""
