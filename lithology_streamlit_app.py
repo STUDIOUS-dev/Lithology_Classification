@@ -10,6 +10,8 @@ import glob
 from datetime import datetime
 import json
 from pathlib import Path
+import subprocess
+import sys
 
 # SVG Icons for consistent UI
 SVG_ICONS = {
@@ -536,6 +538,91 @@ class LithologyApp:
             'features_used': features
         }
 
+def download_models_if_needed():
+    """Download models from cloud storage if not present locally"""
+
+    app = LithologyApp()  # Create app instance to get paths
+
+    # Check if models exist
+    models_exist = (
+        (app.base_dir / "models" / "lithology_model.joblib").exists() and
+        (app.base_dir / "models" / "lithology_preprocessing.joblib").exists() and
+        (app.base_dir / "models" / "xgboost_model.joblib").exists()
+    )
+
+    model_results_exist = app.MODEL_DIR.exists() and len(list(app.MODEL_DIR.glob("*.joblib"))) > 0
+
+    if models_exist and model_results_exist:
+        return True  # Models already present
+
+    # Models missing - offer download
+    st.warning("⚠️ Trained models not found locally. This is expected for cloud deployment.")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        if st.button("📥 Download Models from Cloud", type="primary"):
+            with st.spinner("Downloading models..."):
+                try:
+                    # Run the download script
+                    result = subprocess.run([
+                        sys.executable, "download_models.py"
+                    ], capture_output=True, text=True, cwd=app.base_dir)
+
+                    if result.returncode == 0:
+                        st.success("✅ Models downloaded successfully!")
+                        st.rerun()  # Refresh to load models
+                        return True
+                    else:
+                        st.error("❌ Model download failed!")
+                        st.code(result.stderr)
+                        return False
+
+                except Exception as e:
+                    st.error(f"❌ Download error: {e}")
+                    return False
+
+    with col2:
+        if st.button("📂 Upload Model Files Manually"):
+            st.info("Upload your trained model files:")
+            uploaded_models = st.file_uploader(
+                "Upload models ZIP",
+                type=["zip"],
+                help="Upload a ZIP file containing your models/ and model_results/ directories"
+            )
+
+            if uploaded_models:
+                # Handle manual upload logic here
+                st.info("Manual upload feature coming soon. Please use the download button for now.")
+
+    # Show instructions
+    with st.expander("📋 Setup Instructions", expanded=True):
+        st.markdown("""
+        **To set up models for deployment:**
+
+        1. **Upload your model files** to cloud storage (Google Drive, Dropbox, etc.)
+        2. **Get direct download links** for your model archives
+        3. **Edit `download_models.py`** and replace the placeholder URLs:
+           ```python
+           MODELS_URL = "YOUR_MODELS_ZIP_URL"
+           MODEL_RESULTS_URL = "YOUR_MODEL_RESULTS_ZIP_URL"
+           ```
+        4. **Run the download** using the button above
+
+        **Expected file structure:**
+        ```
+        models/
+        ├── lithology_model.joblib
+        ├── lithology_preprocessing.joblib
+        └── xgboost_model.joblib
+        model_results/
+        ├── *_model_*.joblib
+        └── preprocessing_objects_*.joblib
+        ```
+        """)
+
+    return False
+
 def main():
     # Header
     st.markdown(f'{icon("rock")} <span style="font-size:2rem; font-weight:700;">Lithology Classification System</span>',
@@ -562,6 +649,9 @@ def main():
     # Initialize app
     app = LithologyApp()
 
+    # Check for and download models if needed
+    models_available = download_models_if_needed()
+
     # Sidebar
     st.sidebar.header("Configuration")
 
@@ -579,8 +669,8 @@ def main():
             else:
                 st.session_state.models_loaded = False
 
-    # Auto-load models if not already loaded
-    if not hasattr(st.session_state, 'models_loaded') or not st.session_state.models_loaded:
+    # Auto-load models if not already loaded and models are available
+    if models_available and (not hasattr(st.session_state, 'models_loaded') or not st.session_state.models_loaded):
         st.info("Auto-loading trained models...")
         with st.spinner("Loading trained models..."):
             if app.load_models():

@@ -46,7 +46,15 @@ The project is configured for seamless deployment to Streamlit Community Cloud:
 - `requirements.in`: Defines flexible version ranges for maintainability
 - `requirements.txt`: Auto-generated exact pins for reproducible builds
 
-Simply push to GitHub and deploy - no manual dependency management needed!
+**Model Deployment Setup:**
+Since model files are large (~4GB), they are not stored in the git repository. Instead, the app automatically downloads them from cloud storage on first run:
+
+1. **Upload your trained models** to cloud storage (Google Drive, Dropbox, GitHub Releases, etc.)
+2. **Get direct download links** for your model archives
+3. **Configure `download_models.py`** with your URLs
+4. **Deploy to Streamlit Cloud** - models will download automatically
+
+Simply push to GitHub and deploy - the app handles model setup automatically!
 
 ## <img src="https://raw.githubusercontent.com/lucide-icons/lucide/main/icons/line-chart.svg" width="24" height="24" style="vertical-align: middle;"> How to Use
 
@@ -71,12 +79,14 @@ Choose your model (Random Forest is usually a safe bet for reliability) and watc
 ## <img src="https://raw.githubusercontent.com/lucide-icons/lucide/main/icons/folder.svg" width="24" height="24" style="vertical-align: middle;"> Project Structure
 
 - `lithology_streamlit_app.py`: The heart of the project—the interactive UI.
+- `download_models.py`: Script to download trained models from cloud storage.
 - `litho_data/`: Place your training/testing CSVs here.
-- `models/`: Where the trained `.joblib` artifacts are stored.
-- `model_results/`: Logs, evaluation reports, performance metrics, and trained model files (included in repo for deployment).
+- `models/`: Directory for trained `.joblib` artifacts (downloaded automatically, not in repo).
+- `model_results/`: Directory for evaluation reports and model files (downloaded automatically, not in repo).
 - `requirements.in`: Flexible dependency ranges for maintainability.
 - `requirements.txt`: Auto-generated exact pins for reproducible builds.
 - `runtime.txt`: Python version pinning for Streamlit Cloud deployment.
+- `archive_unused/`: Legacy code and unused files.
 
 ## <img src="https://raw.githubusercontent.com/lucide-icons/lucide/main/icons/binary.svg" width="24" height="24" style="vertical-align: middle;"> Technical Note: Using the Models in Python
 
@@ -96,8 +106,25 @@ imputer = preproc['imputer']
 # Your inference code here...
 ```
 
-## <img src="https://raw.githubusercontent.com/lucide-icons/lucide/main/icons/users-2.svg" width="24" height="24" style="vertical-align: middle;"> Contributing
-I'm always looking to improve this! If you have ideas for better feature engineering or more robust models, feel free to open a PR.
+## <img src="https://raw.githubusercontent.com/lucide-icons/lucide/main/icons/help-circle.svg" width="24" height="24" style="vertical-align: middle;"> Troubleshooting
+
+### Model Download Issues
+If models fail to download automatically:
+
+1. **Check your internet connection** - The app needs to download ~4GB of model files
+2. **Verify download URLs** in `download_models.py` are accessible
+3. **Use manual download** - Run `python download_models.py` locally first
+4. **Check file permissions** - Ensure write access to the project directory
+
+### Common Deployment Issues
+- **"model_results directory does not exist!"** - Models haven't downloaded yet. Wait for download or use manual download.
+- **Import errors** - Ensure `pip install -r requirements.txt` completed successfully
+- **Memory issues** - The models require ~8GB RAM for loading. Reduce batch size if needed.
+
+### Model Compatibility
+- Models were trained on scikit-learn and XGBoost
+- If you get sklearn version mismatch errors, retrain models with current versions
+- All preprocessing steps are saved and applied automatically
 
 ---
 *Built for the ONGC Petrophysical Analysis Team | 2025*
