@@ -25,9 +25,6 @@ Thumbs.db
 # Test results
 .pytest_cache/
 
-# Model artifacts
-models/*.joblib
-
 # Data output
 model_results/
 
