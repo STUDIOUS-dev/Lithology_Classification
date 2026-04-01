@@ -322,7 +322,14 @@ st.markdown("""
 
 class LithologyApp:
     def __init__(self):
-        self.base_dir = Path(__file__).resolve().parent
+        # More robust path resolution for different environments
+        try:
+            # Try to get the script directory
+            self.base_dir = Path(__file__).resolve().parent
+        except NameError:
+            # Fallback for environments where __file__ is not available
+            self.base_dir = Path.cwd()
+        
         self.models = {}
         self.preprocessing_objects = None
         self.evaluation_results = {}
@@ -542,18 +549,22 @@ class LithologyApp:
 def download_models_if_needed():
     """Download models from cloud storage if not present locally"""
 
-    app = LithologyApp()  # Create app instance to get paths
+    # Use current working directory for more reliable path resolution
+    base_dir = Path.cwd()
+    models_dir = base_dir / "models"
+    model_results_dir = base_dir / "model_results"
 
     # Debug: Show paths being checked
     st.write("**Debug Info:**")
-    st.write(f"Base directory: {app.base_dir}")
-    st.write(f"Models directory: {app.base_dir / 'models'}")
-    st.write(f"Model results directory: {app.MODEL_DIR}")
+    st.write(f"Current working directory: {os.getcwd()}")
+    st.write(f"Base directory: {base_dir}")
+    st.write(f"Models directory: {models_dir}")
+    st.write(f"Model results directory: {model_results_dir}")
 
     # Check if models exist
-    lithology_model_path = app.base_dir / "models" / "lithology_model.joblib"
-    preprocessing_path = app.base_dir / "models" / "lithology_preprocessing.joblib"
-    xgboost_path = app.base_dir / "models" / "xgboost_model.joblib"
+    lithology_model_path = models_dir / "lithology_model.joblib"
+    preprocessing_path = models_dir / "lithology_preprocessing.joblib"
+    xgboost_path = models_dir / "xgboost_model.joblib"
 
     models_exist = (
         lithology_model_path.exists() and
@@ -566,9 +577,13 @@ def download_models_if_needed():
     st.write(f"XGBoost model exists: {xgboost_path.exists()}")
     st.write(f"Models exist overall: {models_exist}")
 
-    model_results_exist = app.MODEL_DIR.exists() and len(list(app.MODEL_DIR.glob("*.joblib"))) > 0
-    st.write(f"Model results directory exists: {app.MODEL_DIR.exists()}")
-    st.write(f"Model results files: {list(app.MODEL_DIR.glob('*.joblib'))}")
+    model_results_exist = model_results_dir.exists() and len(list(model_results_dir.glob("*.joblib"))) > 0
+    st.write(f"Model results directory exists: {model_results_dir.exists()}")
+    if model_results_dir.exists():
+        model_files = list(model_results_dir.glob("*.joblib"))
+        st.write(f"Model results files: {[f.name for f in model_files]}")
+    else:
+        st.write("Model results files: []")
     st.write(f"Model results exist overall: {model_results_exist}")
 
     if models_exist:
@@ -666,7 +681,10 @@ def main():
     if show_debug:
         with st.sidebar.expander("Debug Info", expanded=False):
             st.write(f"Current directory: {os.getcwd()}")
+            st.write(f"Script directory: {app.base_dir}")
+            st.write(f"Models directory: {app.base_dir / 'models'}")
             st.write(f"Model results path: {app.MODEL_DIR}")
+            st.write(f"Models directory exists: {(app.base_dir / 'models').exists()}")
             st.write(f"Model results exists: {app.MODEL_DIR.exists()}")
 
     # Check for and download models if needed
