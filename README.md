@@ -42,7 +42,7 @@ pip install -r requirements.txt
 
 ### For Streamlit Community Cloud Deployment:
 The project is configured for seamless deployment to Streamlit Community Cloud:
-- `runtime.txt`: Pins Python version to 3.10 for ML compatibility
+- `runtime.txt`: Pins Python version to 3.12 to match the compiled requirements and local environment
 - `requirements.in`: Defines flexible version ranges for maintainability
 - `requirements.txt`: Auto-generated exact pins for reproducible builds
 

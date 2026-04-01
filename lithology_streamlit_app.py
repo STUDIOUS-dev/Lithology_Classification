@@ -1,19 +1,3 @@
-"""
-LITHOLOGY PREDICTION WEB APP
-==============================
-Interactive Streamlit application for lithology classification using trained ML models.
-
-Features:
-- Upload CSV files with well log data
-- Real-time lithology predictions
-- Interactive visualizations
-- Model performance metrics
-- Export predictions
-
-Author: ONGC Petrophysical Analysis Team
-Date: 2025-01-19
-"""
-
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -402,47 +386,49 @@ class LithologyApp:
 
     def load_models(self):
         """Load trained models and preprocessing objects"""
-        st.info("Searching for trained models...")
 
         # Direct file approach - list directory and filter manually
         model_files = []
         preprocessing_files = []
 
-        try:
-            if not os.path.exists("model_results"):
-                st.error("model_results directory does not exist!")
+        with st.expander("Model loading details", expanded=False):
+            st.info("Searching for trained models...")
+
+            try:
+                if not os.path.exists("model_results"):
+                    st.error("model_results directory does not exist!")
+                    return False
+
+                # List all files in model_results directory
+                all_files = os.listdir("model_results")
+                st.info(f"Found {len(all_files)} files in model_results directory")
+
+                # Filter files manually
+                for filename in all_files:
+                    full_path = os.path.join("model_results", filename)
+                    if os.path.isfile(full_path) and filename.endswith('.joblib'):
+                        if '_model_' in filename:
+                            model_files.append(full_path)
+                            st.success(f"Found model: {filename}")
+                        elif filename.startswith('preprocessing_objects_'):
+                            preprocessing_files.append(full_path)
+                            st.success(f"Found preprocessing: {filename}")
+
+                st.info(f"Summary: {len(model_files)} models, {len(preprocessing_files)} preprocessing files")
+
+                # Show all files for debugging
+                st.info("**All files in model_results:**")
+                for filename in sorted(all_files):
+                    full_path = os.path.join("model_results", filename)
+                    if os.path.isfile(full_path):
+                        file_size = os.path.getsize(full_path)
+                        st.write(f"   {filename} ({file_size:,} bytes)")
+                    else:
+                        st.write(f"   {filename} (directory)")
+
+            except Exception as e:
+                st.error(f"Error scanning directory: {str(e)}")
                 return False
-
-            # List all files in model_results directory
-            all_files = os.listdir("model_results")
-            st.info(f"Found {len(all_files)} files in model_results directory")
-
-            # Filter files manually
-            for filename in all_files:
-                full_path = os.path.join("model_results", filename)
-                if os.path.isfile(full_path) and filename.endswith('.joblib'):
-                    if '_model_' in filename:
-                        model_files.append(full_path)
-                        st.success(f"Found model: {filename}")
-                    elif filename.startswith('preprocessing_objects_'):
-                        preprocessing_files.append(full_path)
-                        st.success(f"Found preprocessing: {filename}")
-
-            st.info(f"Summary: {len(model_files)} models, {len(preprocessing_files)} preprocessing files")
-
-            # Show all files for debugging
-            st.info("**All files in model_results:**")
-            for filename in sorted(all_files):
-                full_path = os.path.join("model_results", filename)
-                if os.path.isfile(full_path):
-                    file_size = os.path.getsize(full_path)
-                    st.write(f"   {filename} ({file_size:,} bytes)")
-                else:
-                    st.write(f"   {filename} (directory)")
-
-        except Exception as e:
-            st.error(f"Error scanning directory: {str(e)}")
-            return False
 
         if not model_files or not preprocessing_files:
             st.error("No trained models found!")
@@ -550,13 +536,16 @@ class LithologyApp:
 
 def main():
     # Header
-    st.markdown('<h1 class="main-header">Lithology Classification System</h1>',
+    st.markdown(f'{icon("rock")} <span style="font-size:2rem; font-weight:700;">Lithology Classification System</span>',
                 unsafe_allow_html=True)
 
-    # Debug information
-    st.sidebar.write("**Debug Info:**")
-    st.sidebar.write(f"Current directory: {os.getcwd()}")
-    st.sidebar.write(f"Model results exists: {os.path.exists('model_results')}")
+    # Sidebar debug toggle (hidden by default)
+    show_debug = st.sidebar.checkbox("Show debug info", value=False,
+                                     help="Toggle path/debug details")
+    if show_debug:
+        with st.sidebar.expander("Debug Info", expanded=False):
+            st.write(f"Current directory: {os.getcwd()}")
+            st.write(f"Model results exists: {os.path.exists('model_results')}")
 
     st.markdown("""
     <div style="text-align: center; margin-bottom: 2rem;">
@@ -626,7 +615,7 @@ def main():
                                       "Model Performance", "Export Results"])
 
     with tab1:
-        st.header("Upload Well Log Data")
+        st.markdown(f"{icon('upload')} <strong>Upload Well Log Data</strong>", unsafe_allow_html=True)
 
         # File upload
         uploaded_file = st.file_uploader(
@@ -879,7 +868,7 @@ def main():
                 st.error(f"Error loading file: {str(e)}")
 
     with tab2:
-        st.header("Interactive Visualizations")
+        st.markdown(f"{icon('chart')} <strong>Interactive Visualizations</strong>", unsafe_allow_html=True)
 
         if hasattr(st.session_state, 'prediction_results'):
             df_results = st.session_state.prediction_results
@@ -931,7 +920,7 @@ def main():
             st.info("Upload data and make predictions to see visualizations")
 
     with tab3:
-        st.header("Model Performance Metrics")
+        st.markdown(f"{icon('metrics')} <strong>Model Performance Metrics</strong>", unsafe_allow_html=True)
 
         if hasattr(app, 'evaluation_results') and app.evaluation_results:
             st.subheader("Model Comparison")
@@ -983,7 +972,7 @@ def main():
             st.info("No evaluation results loaded. Please load models first using the sidebar.")
 
     with tab4:
-        st.header("Export Prediction Results")
+        st.markdown(f"{icon('download')} <strong>Export Prediction Results</strong>", unsafe_allow_html=True)
 
         if hasattr(st.session_state, 'prediction_results'):
             df_results = st.session_state.prediction_results
