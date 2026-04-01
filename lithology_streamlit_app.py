@@ -544,17 +544,36 @@ def download_models_if_needed():
 
     app = LithologyApp()  # Create app instance to get paths
 
+    # Debug: Show paths being checked
+    st.write("**Debug Info:**")
+    st.write(f"Base directory: {app.base_dir}")
+    st.write(f"Models directory: {app.base_dir / 'models'}")
+    st.write(f"Model results directory: {app.MODEL_DIR}")
+
     # Check if models exist
+    lithology_model_path = app.base_dir / "models" / "lithology_model.joblib"
+    preprocessing_path = app.base_dir / "models" / "lithology_preprocessing.joblib"
+    xgboost_path = app.base_dir / "models" / "xgboost_model.joblib"
+
     models_exist = (
-        (app.base_dir / "models" / "lithology_model.joblib").exists() and
-        (app.base_dir / "models" / "lithology_preprocessing.joblib").exists() and
-        (app.base_dir / "models" / "xgboost_model.joblib").exists()
+        lithology_model_path.exists() and
+        preprocessing_path.exists() and
+        xgboost_path.exists()
     )
 
-    model_results_exist = app.MODEL_DIR.exists() and len(list(app.MODEL_DIR.glob("*.joblib"))) > 0
+    st.write(f"Lithology model exists: {lithology_model_path.exists()}")
+    st.write(f"Preprocessing exists: {preprocessing_path.exists()}")
+    st.write(f"XGBoost model exists: {xgboost_path.exists()}")
+    st.write(f"Models exist overall: {models_exist}")
 
-    if models_exist and model_results_exist:
-        return True  # Models already present
+    model_results_exist = app.MODEL_DIR.exists() and len(list(app.MODEL_DIR.glob("*.joblib"))) > 0
+    st.write(f"Model results directory exists: {app.MODEL_DIR.exists()}")
+    st.write(f"Model results files: {list(app.MODEL_DIR.glob('*.joblib'))}")
+    st.write(f"Model results exist overall: {model_results_exist}")
+
+    if models_exist:
+        st.success("✅ Models found! Proceeding with app initialization.")
+        return True  # Models present, proceed
 
     # Models missing - offer download
     st.warning("⚠️ Trained models not found locally. This is expected for cloud deployment.")
