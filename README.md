@@ -73,7 +73,7 @@ Choose your model (Random Forest is usually a safe bet for reliability) and watc
 - `lithology_streamlit_app.py`: The heart of the project—the interactive UI.
 - `litho_data/`: Place your training/testing CSVs here.
 - `models/`: Where the trained `.joblib` artifacts are stored.
-- `model_results/`: Logs, evaluation reports, and performance metrics.
+- `model_results/`: Logs, evaluation reports, performance metrics, and trained model files (included in repo for deployment).
 - `requirements.in`: Flexible dependency ranges for maintainability.
 - `requirements.txt`: Auto-generated exact pins for reproducible builds.
 - `runtime.txt`: Python version pinning for Streamlit Cloud deployment.

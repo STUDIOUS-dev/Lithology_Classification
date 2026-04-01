@@ -9,6 +9,7 @@ import os
 import glob
 from datetime import datetime
 import json
+from pathlib import Path
 
 # SVG Icons for consistent UI
 SVG_ICONS = {
@@ -323,6 +324,7 @@ class LithologyApp:
         self.preprocessing_objects = None
         self.evaluation_results = {}
         self.feature_columns = ['GR', 'RHOB', 'NPHI', 'RDEP', 'DTC', 'PEF']
+        self.MODEL_DIR = Path(__file__).resolve().parent / "model_results"
 
     def _ensure_imputer_compatibility(self, imputer):
         """Ensure SimpleImputer has _fill_dtype for compatibility across sklearn versions."""
@@ -395,36 +397,35 @@ class LithologyApp:
             st.info("Searching for trained models...")
 
             try:
-                if not os.path.exists("model_results"):
+                if not self.MODEL_DIR.exists():
                     st.error("model_results directory does not exist!")
                     return False
 
                 # List all files in model_results directory
-                all_files = os.listdir("model_results")
+                all_files = list(self.MODEL_DIR.iterdir())
                 st.info(f"Found {len(all_files)} files in model_results directory")
 
                 # Filter files manually
-                for filename in all_files:
-                    full_path = os.path.join("model_results", filename)
-                    if os.path.isfile(full_path) and filename.endswith('.joblib'):
+                for file_path in all_files:
+                    if file_path.is_file() and file_path.suffix == '.joblib':
+                        filename = file_path.name
                         if '_model_' in filename:
-                            model_files.append(full_path)
+                            model_files.append(str(file_path))
                             st.success(f"Found model: {filename}")
                         elif filename.startswith('preprocessing_objects_'):
-                            preprocessing_files.append(full_path)
+                            preprocessing_files.append(str(file_path))
                             st.success(f"Found preprocessing: {filename}")
 
                 st.info(f"Summary: {len(model_files)} models, {len(preprocessing_files)} preprocessing files")
 
                 # Show all files for debugging
                 st.info("**All files in model_results:**")
-                for filename in sorted(all_files):
-                    full_path = os.path.join("model_results", filename)
-                    if os.path.isfile(full_path):
-                        file_size = os.path.getsize(full_path)
-                        st.write(f"   {filename} ({file_size:,} bytes)")
+                for file_path in sorted(all_files):
+                    if file_path.is_file():
+                        file_size = file_path.stat().st_size
+                        st.write(f"   {file_path.name} ({file_size:,} bytes)")
                     else:
-                        st.write(f"   {filename} (directory)")
+                        st.write(f"   {file_path.name} (directory)")
 
             except Exception as e:
                 st.error(f"Error scanning directory: {str(e)}")
@@ -469,7 +470,8 @@ class LithologyApp:
                 st.stop()
 
             # Load evaluation results if available
-            eval_files = glob.glob("model_results/evaluation_results_*.json")
+            eval_pattern = str(self.MODEL_DIR / "evaluation_results_*.json")
+            eval_files = glob.glob(eval_pattern)
             if eval_files:
                 latest_eval = max(eval_files, key=os.path.getctime)
                 with open(latest_eval, 'r') as f:
@@ -545,7 +547,8 @@ def main():
     if show_debug:
         with st.sidebar.expander("Debug Info", expanded=False):
             st.write(f"Current directory: {os.getcwd()}")
-            st.write(f"Model results exists: {os.path.exists('model_results')}")
+            st.write(f"Model results path: {app.MODEL_DIR}")
+            st.write(f"Model results exists: {app.MODEL_DIR.exists()}")
 
     st.markdown("""
     <div style="text-align: center; margin-bottom: 2rem;">
@@ -589,9 +592,10 @@ def main():
                 st.success("Models loaded successfully!")
                 st.rerun()  # Refresh the app to show the loaded models
             else:
+                st.session_state.models_loaded = False
                 st.warning("Could not auto-load models. Please use the 'Load Models' button in the sidebar.")
                 st.info("Tip: Make sure you have run the training pipeline: `python lithology_ml_pipeline.py`")
-                return
+                # Continue without models - user can still upload and use manual load
     else:
         # Restore models from session state
         if hasattr(st.session_state, 'app_models'):
