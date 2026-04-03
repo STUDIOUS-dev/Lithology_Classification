@@ -724,38 +724,73 @@ def main():
     with tab1:
         st.markdown(f"{icon('upload')} <strong>Upload Well Log Data</strong>", unsafe_allow_html=True)
 
+        st.markdown("### 🧪 Try our Sample Dataset")
+        st.markdown("Don't have your own well log data right now? You can explore the app's predictive capabilities using our hidden test sample.")
+        
+        sample_path = "data/hidden_test_sample.csv"
+        
+        col_s1, col_s2 = st.columns([1, 1])
+        with col_s1:
+            try:
+                import os
+                if os.path.exists(sample_path):
+                    with open(sample_path, "rb") as f:
+                        st.download_button(
+                            label="📥 Download Sample Data",
+                            data=f,
+                            file_name="lithology_sample_dataset.csv",
+                            mime="text/csv",
+                            help="Download the sample dataset to inspect it before uploading"
+                        )
+            except Exception:
+                pass
+                
+        with col_s2:
+            if st.button("🚀 Load Sample Data Automatically"):
+                st.session_state.use_sample_data = True
+                
+        st.markdown("---")
+
         # File upload
         uploaded_file = st.file_uploader(
-            "Choose a CSV file with well log data",
+            "Choose a CSV file with well log data (or use the sample dataset above)",
             type=['csv'],
             help="Upload a CSV file containing well log measurements"
         )
 
-        if uploaded_file is not None:
+        if uploaded_file is not None or getattr(st.session_state, "use_sample_data", False):
+            if uploaded_file is not None:
+                # If user manually uploads a file, override the sample mode
+                st.session_state.use_sample_data = False
+                
             try:
                 # Smart CSV loading with different separators
                 df = None
-                separators = [',', ';', '\t', '|']
-
-                for sep in separators:
-                    try:
-                        df_test = pd.read_csv(uploaded_file, sep=sep, nrows=5, on_bad_lines='skip')
-                        if df_test.shape[1] > 1:  # More than one column means good separator
+                
+                if getattr(st.session_state, "use_sample_data", False):
+                    df = pd.read_csv(sample_path)
+                    st.info("Using embedded Sample Dataset: `hidden_test_sample.csv`")
+                else:
+                    separators = [',', ';', '\t', '|']
+                    for sep in separators:
+                        try:
+                            df_test = pd.read_csv(uploaded_file, sep=sep, nrows=5, on_bad_lines='skip')
+                            if df_test.shape[1] > 1:  # More than one column means good separator
+                                uploaded_file.seek(0)  # Reset file pointer
+                                df = pd.read_csv(uploaded_file, sep=sep, on_bad_lines='skip')
+                                st.info(f"Detected separator: '{sep}' | Columns: {df.shape[1]}")
+                                if df.shape[0] < df_test.shape[0] * 100:  # Warn if many lines were skipped
+                                    st.warning("Some malformed lines were skipped during parsing")
+                                break
+                            uploaded_file.seek(0)  # Reset file pointer for next attempt
+                        except Exception as e:
                             uploaded_file.seek(0)  # Reset file pointer
-                            df = pd.read_csv(uploaded_file, sep=sep, on_bad_lines='skip')
-                            st.info(f"Detected separator: '{sep}' | Columns: {df.shape[1]}")
-                            if df.shape[0] < df_test.shape[0] * 100:  # Warn if many lines were skipped
-                                st.warning("Some malformed lines were skipped during parsing")
-                            break
-                        uploaded_file.seek(0)  # Reset file pointer for next attempt
-                    except Exception as e:
-                        uploaded_file.seek(0)  # Reset file pointer
-                        continue
+                            continue
 
-                if df is None:
-                    # Fallback to comma separator
-                    df = pd.read_csv(uploaded_file, on_bad_lines='skip')
-                    st.warning("Using default comma separator")
+                    if df is None:
+                        # Fallback to comma separator
+                        df = pd.read_csv(uploaded_file, on_bad_lines='skip')
+                        st.warning("Using default comma separator")
 
                 st.success(f"Data loaded successfully! Shape: {df.shape}")
 
