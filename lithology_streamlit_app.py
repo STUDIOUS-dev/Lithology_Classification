@@ -10,8 +10,7 @@ import glob
 from datetime import datetime
 import json
 from pathlib import Path
-import subprocess
-import sys
+
 
 # SVG Icons for consistent UI
 SVG_ICONS = {
@@ -334,7 +333,10 @@ class LithologyApp:
         self.preprocessing_objects = None
         self.evaluation_results = {}
         self.feature_columns = ['GR', 'RHOB', 'NPHI', 'RDEP', 'DTC', 'PEF']
-        self.MODEL_DIR = self.base_dir / "model_results"
+        # Primary: clean models/ dir (deployed via git)
+        # Fallback: model_results/ dir (local training output, gitignored)
+        self.MODELS_DIR = self.base_dir / "models"
+        self.MODEL_RESULTS_DIR = self.base_dir / "model_results"
 
     def _ensure_imputer_compatibility(self, imputer):
         """Ensure SimpleImputer has _fill_dtype for compatibility across sklearn versions."""
@@ -397,104 +399,155 @@ class LithologyApp:
         return df_mapped, mapping_applied
 
     def load_models(self):
-        """Load trained models and preprocessing objects"""
+        """Load trained models and preprocessing objects.
+        
+        Strategy:
+        1. Try loading from models/ directory (clean names, deployed via git)
+        2. Fall back to model_results/ directory (timestamped names, local training output)
+        """
 
-        # Direct file approach - list directory and filter manually
-        model_files = []
-        preprocessing_files = []
+        # Strategy 1: Load from clean models/ directory (deployment path)
+        if self._load_from_models_dir():
+            return True
 
-        with st.expander("Model loading details", expanded=False):
-            st.info("Searching for trained models...")
+        # Strategy 2: Fall back to model_results/ directory (local dev path)
+        if self._load_from_model_results_dir():
+            return True
 
-            try:
-                if not self.MODEL_DIR.exists():
-                    st.error("model_results directory does not exist!")
-                    return False
+        st.error("No trained models found in either `models/` or `model_results/` directories.")
+        st.info("Tip: Make sure you have run the training pipeline: `python lithology_ml_pipeline.py`")
+        return False
 
-                # List all files in model_results directory
-                all_files = list(self.MODEL_DIR.iterdir())
-                st.info(f"Found {len(all_files)} files in model_results directory")
+    def _load_from_models_dir(self):
+        """Load models from the clean models/ directory (used in deployment)."""
+        models_dir = self.MODELS_DIR
 
-                # Filter files manually
-                for file_path in all_files:
-                    if file_path.is_file() and file_path.suffix == '.joblib':
-                        filename = file_path.name
-                        if '_model_' in filename:
-                            model_files.append(str(file_path))
-                            st.success(f"Found model: {filename}")
-                        elif filename.startswith('preprocessing_objects_'):
-                            preprocessing_files.append(str(file_path))
-                            st.success(f"Found preprocessing: {filename}")
+        if not models_dir.exists():
+            return False
 
-                st.info(f"Summary: {len(model_files)} models, {len(preprocessing_files)} preprocessing files")
+        # Expected clean file names
+        rf_path = models_dir / "lithology_model.joblib"
+        xgb_path = models_dir / "xgboost_model.joblib"
+        preproc_path = models_dir / "lithology_preprocessing.joblib"
+        eval_path = models_dir / "evaluation_results.json"
 
-                # Show all files for debugging
-                st.info("**All files in model_results:**")
-                for file_path in sorted(all_files):
-                    if file_path.is_file():
-                        file_size = file_path.stat().st_size
-                        st.write(f"   {file_path.name} ({file_size:,} bytes)")
-                    else:
-                        st.write(f"   {file_path.name} (directory)")
+        # Need at least one model + preprocessing
+        if not preproc_path.exists():
+            return False
 
-            except Exception as e:
-                st.error(f"Error scanning directory: {str(e)}")
-                return False
+        has_rf = rf_path.exists()
+        has_xgb = xgb_path.exists()
 
-        if not model_files or not preprocessing_files:
-            st.error("No trained models found!")
-            st.info("Expected files:")
-            st.info("   - Files ending with '_model_YYYYMMDD_HHMMSS.joblib'")
-            st.info("   - Files starting with 'preprocessing_objects_'")
+        if not has_rf and not has_xgb:
             return False
 
         try:
-            # Load latest models
+            # Load preprocessing objects
+            try:
+                self.preprocessing_objects = joblib.load(preproc_path)
+            except Exception as e:
+                st.error(f"Preprocessing loading failed: {e}")
+                return False
+
+            # Load models
+            if has_rf:
+                try:
+                    self.models['random_forest'] = joblib.load(rf_path)
+                except Exception as e:
+                    st.warning(f"Random Forest model loading failed: {e}")
+
+            if has_xgb:
+                try:
+                    self.models['xgboost'] = joblib.load(xgb_path)
+                except Exception as e:
+                    st.warning(f"XGBoost model loading failed: {e}")
+
+            if not self.models:
+                st.error("All model files failed to load.")
+                return False
+
+            # Load evaluation results
+            if eval_path.exists():
+                try:
+                    with open(eval_path, 'r') as f:
+                        self.evaluation_results = json.load(f)
+                except Exception:
+                    pass  # Non-critical
+
+            st.success(f"Loaded {len(self.models)} model(s) from `models/`: {list(self.models.keys())}")
+            return True
+
+        except Exception as e:
+            st.error(f"Error loading from models/ directory: {e}")
+            return False
+
+    def _load_from_model_results_dir(self):
+        """Load models from the model_results/ directory (timestamped training output)."""
+        model_results_dir = self.MODEL_RESULTS_DIR
+
+        if not model_results_dir.exists():
+            return False
+
+        model_files = []
+        preprocessing_files = []
+
+        try:
+            for file_path in model_results_dir.iterdir():
+                if file_path.is_file() and file_path.suffix == '.joblib':
+                    filename = file_path.name
+                    if '_model_' in filename:
+                        model_files.append(str(file_path))
+                    elif filename.startswith('preprocessing_objects_'):
+                        preprocessing_files.append(str(file_path))
+        except Exception as e:
+            st.error(f"Error scanning model_results/ directory: {e}")
+            return False
+
+        if not model_files or not preprocessing_files:
+            return False
+
+        try:
+            # Load latest models by timestamp
             latest_timestamp = max([f.split('_')[-1].replace('.joblib', '') for f in model_files])
-            st.info(f"Using models from timestamp: {latest_timestamp}")
 
             models_loaded = 0
             for model_file in model_files:
                 if latest_timestamp in model_file:
-                    # Handle both Windows and Unix path separators
                     filename = os.path.basename(model_file)
                     model_name = filename.split('_model_')[0]
-
-                    st.info(f"Loading {model_name} model from {model_file}")
                     try:
                         self.models[model_name] = joblib.load(model_file)
+                        models_loaded += 1
                     except Exception as e:
-                        st.error(f"Model loading failed for {model_name}: {e}. The model may need to be retrained on the current sklearn version.")
-                        st.stop()
-                    models_loaded += 1
+                        st.warning(f"Model loading failed for {model_name}: {e}")
 
-            st.success(f"Loaded {models_loaded} models: {list(self.models.keys())}")
+            if models_loaded == 0:
+                return False
 
             # Load preprocessing objects
             latest_preprocessing = max(preprocessing_files, key=os.path.getctime)
-            st.info(f"Loading preprocessing objects from {latest_preprocessing}")
             try:
                 self.preprocessing_objects = joblib.load(latest_preprocessing)
             except Exception as e:
-                st.error(f"Preprocessing objects loading failed: {e}. The preprocessing objects may need to be regenerated on the current sklearn version.")
-                st.stop()
+                st.error(f"Preprocessing loading failed: {e}")
+                return False
 
-            # Load evaluation results if available
-            eval_pattern = str(self.MODEL_DIR / "evaluation_results_*.json")
+            # Load evaluation results
+            eval_pattern = str(model_results_dir / "evaluation_results_*.json")
             eval_files = glob.glob(eval_pattern)
             if eval_files:
-                latest_eval = max(eval_files, key=os.path.getctime)
-                with open(latest_eval, 'r') as f:
-                    self.evaluation_results = json.load(f)
-                st.info(f"Loaded evaluation results from {latest_eval}")
+                try:
+                    latest_eval = max(eval_files, key=os.path.getctime)
+                    with open(latest_eval, 'r') as f:
+                        self.evaluation_results = json.load(f)
+                except Exception:
+                    pass  # Non-critical
 
+            st.success(f"Loaded {models_loaded} model(s) from `model_results/`: {list(self.models.keys())}")
             return True
 
         except Exception as e:
-            st.error(f"Error loading models: {str(e)}")
-            st.error(f"Error details: {type(e).__name__}")
-            import traceback
-            st.code(traceback.format_exc())
+            st.error(f"Error loading from model_results/ directory: {e}")
             return False
 
     def preprocess_data(self, df):
@@ -546,115 +599,34 @@ class LithologyApp:
             'features_used': features
         }
 
-def download_models_if_needed():
-    """Download models from cloud storage if not present locally"""
-
-    # Use current working directory for more reliable path resolution
+def check_models_available():
+    """Check whether model files are available in either directory.
+    
+    Returns True if models are present in models/ or model_results/.
+    """
     base_dir = Path.cwd()
     models_dir = base_dir / "models"
     model_results_dir = base_dir / "model_results"
 
-    # Debug: Show paths being checked
-    st.write("**Debug Info:**")
-    st.write(f"Current working directory: {os.getcwd()}")
-    st.write(f"Base directory: {base_dir}")
-    st.write(f"Models directory: {models_dir}")
-    st.write(f"Model results directory: {model_results_dir}")
-
-    # Check if models exist
-    lithology_model_path = models_dir / "lithology_model.joblib"
-    preprocessing_path = models_dir / "lithology_preprocessing.joblib"
-    xgboost_path = models_dir / "xgboost_model.joblib"
-
-    models_exist = (
-        lithology_model_path.exists() and
-        preprocessing_path.exists() and
-        xgboost_path.exists()
+    # Check clean models/ directory (deployment path)
+    models_dir_ok = (
+        (models_dir / "lithology_model.joblib").exists() and
+        (models_dir / "lithology_preprocessing.joblib").exists()
+    ) or (
+        (models_dir / "xgboost_model.joblib").exists() and
+        (models_dir / "lithology_preprocessing.joblib").exists()
     )
 
-    st.write(f"Lithology model exists: {lithology_model_path.exists()}")
-    st.write(f"Preprocessing exists: {preprocessing_path.exists()}")
-    st.write(f"XGBoost model exists: {xgboost_path.exists()}")
-    st.write(f"Models exist overall: {models_exist}")
+    if models_dir_ok:
+        return True
 
-    model_results_exist = model_results_dir.exists() and len(list(model_results_dir.glob("*.joblib"))) > 0
-    st.write(f"Model results directory exists: {model_results_dir.exists()}")
+    # Check model_results/ directory (local training output)
     if model_results_dir.exists():
-        model_files = list(model_results_dir.glob("*.joblib"))
-        st.write(f"Model results files: {[f.name for f in model_files]}")
-    else:
-        st.write("Model results files: []")
-    st.write(f"Model results exist overall: {model_results_exist}")
-
-    if models_exist:
-        st.success("✅ Models found! Proceeding with app initialization.")
-        return True  # Models present, proceed
-
-    # Models missing - offer download
-    st.warning("⚠️ Trained models not found locally. This is expected for cloud deployment.")
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-        if st.button("📥 Download Models from Cloud", type="primary"):
-            with st.spinner("Downloading models..."):
-                try:
-                    # Run the download script
-                    result = subprocess.run([
-                        sys.executable, "download_models.py"
-                    ], capture_output=True, text=True, cwd=app.base_dir)
-
-                    if result.returncode == 0:
-                        st.success("✅ Models downloaded successfully!")
-                        st.rerun()  # Refresh to load models
-                        return True
-                    else:
-                        st.error("❌ Model download failed!")
-                        st.code(result.stderr)
-                        return False
-
-                except Exception as e:
-                    st.error(f"❌ Download error: {e}")
-                    return False
-
-    with col2:
-        if st.button("📂 Upload Model Files Manually"):
-            st.info("Upload your trained model files:")
-            uploaded_models = st.file_uploader(
-                "Upload models ZIP",
-                type=["zip"],
-                help="Upload a ZIP file containing your models/ and model_results/ directories"
-            )
-
-            if uploaded_models:
-                # Handle manual upload logic here
-                st.info("Manual upload feature coming soon. Please use the download button for now.")
-
-    # Show instructions
-    with st.expander("📋 Setup Instructions", expanded=True):
-        st.markdown("""
-        **To set up models for deployment:**
-
-        1. **Upload your model files** to cloud storage (Google Drive, Dropbox, etc.)
-        2. **Get direct download links** for your model archives
-        3. **Edit `download_models.py`** and replace the placeholder URLs:
-           ```python
-           MODELS_URL = "YOUR_MODELS_ZIP_URL"
-           MODEL_RESULTS_URL = "YOUR_MODEL_RESULTS_ZIP_URL"
-           ```
-        4. **Run the download** using the button above
-
-        **Expected file structure:**
-        ```
-        models/
-        ├── lithology_model.joblib
-        ├── lithology_preprocessing.joblib
-        └── xgboost_model.joblib
-        model_results/
-        ├── *_model_*.joblib
-        └── preprocessing_objects_*.joblib
-        ```
-        """)
+        joblib_files = list(model_results_dir.glob("*.joblib"))
+        has_model = any('_model_' in f.name for f in joblib_files)
+        has_preproc = any(f.name.startswith('preprocessing_objects_') for f in joblib_files)
+        if has_model and has_preproc:
+            return True
 
     return False
 
@@ -682,13 +654,16 @@ def main():
         with st.sidebar.expander("Debug Info", expanded=False):
             st.write(f"Current directory: {os.getcwd()}")
             st.write(f"Script directory: {app.base_dir}")
-            st.write(f"Models directory: {app.base_dir / 'models'}")
-            st.write(f"Model results path: {app.MODEL_DIR}")
-            st.write(f"Models directory exists: {(app.base_dir / 'models').exists()}")
-            st.write(f"Model results exists: {app.MODEL_DIR.exists()}")
+            st.write(f"Models dir: {app.MODELS_DIR} (exists: {app.MODELS_DIR.exists()})")
+            st.write(f"Model results dir: {app.MODEL_RESULTS_DIR} (exists: {app.MODEL_RESULTS_DIR.exists()})")
+            st.write(f"Models available: {check_models_available()}")
 
-    # Check for and download models if needed
-    models_available = download_models_if_needed()
+    # Check if models are available in any directory
+    models_available = check_models_available()
+
+    if not models_available:
+        st.warning("⚠️ No trained models found. Please ensure model files are present in the `models/` directory.")
+        st.info("Tip: Run the training pipeline locally first: `python lithology_ml_pipeline.py`")
 
     # Sidebar
     st.sidebar.header("Configuration")
